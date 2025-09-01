@@ -1,0 +1,1261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Ocean's Edge</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial;
+       background:#001122;overflow:hidden;height:100vh;user-select:none;touch-action:none}
+  #gameContainer{position:relative;width:100vw;height:100vh}
+  #gameCanvas{display:block}
+  .ocean-waves,.floating-waves{position:absolute;inset:0;pointer-events:none}
+  .ocean-waves{
+    background:
+      radial-gradient(circle at 20% 80%, rgba(135,206,235,.25) 0%, transparent 50%),
+      radial-gradient(circle at 80% 20%, rgba(70,130,180,.18) 0%, transparent 50%),
+      radial-gradient(circle at 40% 40%, rgba(25,25,112,.08) 0%, transparent 50%);
+    animation:oceanWaves 6s ease-in-out infinite; z-index:1
+  }
+  @keyframes oceanWaves{0%,100%{transform:translateY(0) scale(1);opacity:.65}
+                        50%{transform:translateY(-15px) scale(1.02);opacity:.95}}
+  .floating-waves{
+    background:linear-gradient(90deg,transparent 0%, rgba(255,255,255,.08) 50%, transparent 100%);
+    animation:floatingWaves 8s linear infinite; z-index:2
+  }
+  @keyframes floatingWaves{0%{transform:translateX(-100%)}100%{transform:translateX(100%)}}
+
+  #hud{position:absolute;top:0;left:0;right:0;z-index:5;
+       color:#fff;padding:10px 20px;
+       display:flex;flex-direction:column;align-items:flex-start;justify-content:flex-start;
+       font-weight:600;font-size:14px;
+       background:transparent;border:none}
+  
+  .hud-top{display:flex;align-items:center;gap:25px;margin-bottom:10px}
+  .hud-bottom{display:flex;align-items:center;gap:20px}
+  .hud-stat{display:flex;align-items:center;gap:8px}
+  .hud-label{font-size:14px;opacity:.8;font-weight:500}
+  .hud-value{font-size:16px;font-weight:600;text-shadow:1px 1px 2px rgba(0,0,0,0.5)}
+  
+  .progress-mini{width:80px;height:6px;border-radius:3px;overflow:hidden;
+                 background:rgba(0,0,0,.4);position:relative;
+                 border:1px solid rgba(255,255,255,.3);
+                 box-shadow:none}
+  .hull-fill{height:100%;background:linear-gradient(90deg,#ff4444,#44ff44);
+             transition:width .4s ease;border-radius:3px;
+             box-shadow:none}
+  .fuel-fill{height:100%;background:linear-gradient(90deg,#ff8800,#ffdd00);
+             transition:width .4s ease;border-radius:3px;
+             box-shadow:none}
+  .season-indicator{display:inline-block;font-weight:700;font-size:14px;padding:6px 12px;border-radius:20px;
+                    transition:all 0.5s ease}
+  .summer{background:linear-gradient(45deg,#ffeb3b,#ffc107);color:#333}
+  .autumn{background:linear-gradient(45deg,#ff9800,#ff5722);color:#fff}
+  .winter{background:linear-gradient(45deg,#2196f3,#03a9f4);color:#fff}
+  .storm{background:linear-gradient(45deg,#9c27b0,#673ab7);color:#fff}
+
+  .pause-btn{position:absolute;top:10px;right:10px;z-index:6;
+             background:rgba(0,20,40,.9);color:#fff;padding:8px 12px;border-radius:8px;
+             border:2px solid rgba(135,206,235,.4);cursor:pointer;
+             font-size:14px;font-weight:600;transition:all .2s ease}
+  .pause-btn:hover{background:rgba(70,130,180,.8);transform:translateY(-1px)}
+
+  #menuScreen,#gameOverScreen,#pauseScreen{position:absolute;inset:0;display:flex;flex-direction:column;
+      align-items:center;justify-content:center;color:#fff;text-align:center;z-index:6}
+  #menuScreen{background:linear-gradient(180deg,#001122 0%,#003366 50%,#004488 100%)}
+  #gameOverScreen,#pauseScreen{display:none;background:rgba(0,17,34,.95);backdrop-filter:blur(10px)}
+  .title{font-size:4rem;font-weight:900;color:#87CEEB;text-shadow:3px 3px 6px rgba(0,0,0,.8);margin-bottom:14px}
+  .subtitle{max-width:700px;color:#B0C4DE;line-height:1.6;margin:0 20px 36px}
+  .game-btn{background:linear-gradient(45deg,#9b59b6,#6bb6ff);color:#fff;border:0;padding:14px 28px;
+            border-radius:12px;font-weight:700;cursor:pointer;box-shadow:0 6px 18px rgba(155,89,182,.35);
+            transition:transform .15s ease, box-shadow .15s ease;margin:5px}
+  .game-btn:hover{transform:translateY(-2px);box-shadow:0 10px 26px rgba(155,89,182,.45)}
+  .controls{margin-top:22px;color:#B0C4DE}
+
+  .shake{animation:shake .28s ease-in-out}
+  @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-5px)}75%{transform:translateX(5px)}}
+
+  .combo-indicator{position:absolute;top:150px;right:20px;z-index:5;
+                   background:rgba(255,215,0,.2);color:#ffd700;padding:10px 15px;border-radius:10px;
+                   border:2px solid rgba(255,215,0,.5);backdrop-filter:blur(10px);
+                   font-weight:bold;font-size:14px;display:none;animation:pulse 1s infinite}
+  @keyframes pulse{0%,100%{transform:scale(1)}50%{transform:scale(1.05)}}
+
+  .season-transition{position:absolute;inset:0;z-index:4;pointer-events:none;
+                     background:radial-gradient(circle, rgba(255,255,255,0.3) 0%, transparent 70%);
+                     opacity:0;animation:seasonFlash 1s ease-out}
+  @keyframes seasonFlash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
+
+  /* Mobile touch controls */
+  .mobile-controls{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
+                   display:none;z-index:6;gap:20px}
+  .touch-btn{width:60px;height:60px;border-radius:50%;background:rgba(0,20,40,.8);
+             border:2px solid rgba(135,206,235,.4);color:#fff;font-size:24px;
+             display:flex;align-items:center;justify-content:center;
+             user-select:none;touch-action:none}
+
+  @media (max-width: 768px) {
+    .mobile-controls{display:flex}
+    .title{font-size:2.5rem}
+    .subtitle{font-size:14px}
+    .hud-label{font-size:13px}
+    .hud-value{font-size:15px}
+  }
+</style>
+</head>
+<body>
+<div id="gameContainer">
+  <div class="ocean-waves"></div>
+  <div class="floating-waves"></div>
+
+  <!-- Main Menu -->
+  <div id="menuScreen">
+    <h1 class="title">Ocean's Edge</h1>
+    <p class="subtitle">
+      Navigate treacherous waters in your sailing ship. Collect fuel and repair kits while avoiding enemy ships.
+      Seasons raise the stakes — survive for the highest score.
+    </p>
+    <button class="game-btn" onclick="startGame()">Set Sail</button>
+    <div class="controls">Use ← → arrow keys to steer • SPACE to pause<br><small>Touch controls available on mobile</small></div>
+  </div>
+
+  <canvas id="gameCanvas" style="display:none"></canvas>
+
+  <!-- HUD -->
+  <div id="hud" style="display:none">
+    <div class="hud-top">
+      <div class="hud-stat">
+        <span class="hud-label">Distance:</span>
+        <span class="hud-value" id="distance">0km</span>
+      </div>
+      <div class="hud-stat">
+        <span class="hud-label">Score:</span>
+        <span class="hud-value" id="score">0</span>
+      </div>
+      <div class="hud-stat">
+        <span id="season" class="season-indicator summer">Summer</span>
+      </div>
+    </div>
+    
+    <div class="hud-bottom">
+      <div class="hud-stat">
+        <span class="hud-label">Health:</span>
+        <div class="progress-mini">
+          <div id="hullBar" class="hull-fill" style="width:100%"></div>
+        </div>
+        <span class="hud-value" id="hullPercent">100%</span>
+      </div>
+      <div class="hud-stat">
+        <span class="hud-label">Fuel:</span>
+        <div class="progress-mini">
+          <div id="fuelBar" class="fuel-fill" style="width:100%"></div>
+        </div>
+        <span class="hud-value" id="fuelPercent">100%</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Mobile Controls -->
+  <div class="mobile-controls" id="mobileControls" style="display:none">
+    <div class="touch-btn" id="leftBtn">←</div>
+    <div class="touch-btn" id="mobilePauseBtn">⏸</div>
+    <div class="touch-btn" id="rightBtn">→</div>
+  </div>
+
+  <!-- Menu Button -->
+  <div class="pause-btn" id="pauseBtn" style="display:none" onclick="togglePause()">☰</div>
+
+  <!-- Combo Indicator -->
+  <div class="combo-indicator" id="comboIndicator">
+    <div>COMBO x<span id="comboCount">2</span></div>
+    <div style="font-size:12px">+<span id="comboBonus">100</span> bonus!</div>
+  </div>
+
+  <!-- Pause Screen -->
+  <div id="pauseScreen">
+    <h2 class="title" style="font-size:3rem">Paused</h2>
+    <div style="display:flex;gap:15px;margin-top:25px;align-items:center;justify-content:center">
+      <button class="game-btn" onclick="togglePause()">Resume</button>
+      <button class="game-btn" onclick="restartGame()">Restart</button>
+      <button class="game-btn" onclick="returnToMenu()">Exit</button>
+    </div>
+  </div>
+
+  <!-- Game Over -->
+  <div id="gameOverScreen">
+    <h2 class="title" style="font-size:3rem;color:#ff6b6b">Game Over</h2>
+    <p style="margin:8px 0">Distance: <b id="finalDistance">0 km</b></p>
+    <p style="margin:8px 0">Final Score: <b id="finalScore">0</b></p>
+    <p style="margin:8px 0">Season Reached: <b id="finalSeason">Summer</b></p>
+    <div style="display:flex;gap:10px;margin-top:18px">
+      <button class="game-btn" onclick="restartGame()">Play Again</button>
+      <button class="game-btn" onclick="returnToMenu()">Main Menu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+/* ------------ Game Constants ------------ */
+const CONFIG = {
+  PLAYER: {
+    SPEED: 7,
+    WIDTH: 36,
+    HEIGHT: 56,
+    HULL_DECAY: 0.6,
+    FUEL_DECAY: 1.0,
+    SAILS_DECAY: 0.3
+  },
+  SPAWN: {
+    OBSTACLE_BASE_CHANCE: 0.012,
+    ITEM_BASE_CHANCE: 0.008
+  },
+  COMBO: {
+    DURATION: 3,
+    MULTIPLIER: 0.5
+  },
+  AUDIO: {
+    MASTER_VOLUME: 0.08
+  },
+  OCEAN: {
+    WAVE_LAYERS: 12,
+    FOAM_PARTICLES: 8,
+    DEPTH_LAYERS: 6
+  }
+};
+
+/* ------------ Core state ------------ */
+const game = {
+  canvas:null, ctx:null, width:0, height:0,
+  running:false, paused:false, lastTime:0,
+  distance:0, score:0,
+  season:0,
+  seasonNames:['Summer','Autumn','Winter','Storm'],
+  seasonClasses:['summer','autumn','winter','storm'],
+  seasonMultipliers:[1,1.5,2.5,4],
+  seasonThresholds:[0,3000,7000,12000],
+  shakeTime:0,
+  combo:0, comboTimer:0,
+  isMobile: /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
+  lastObstacleSpawn: 0,
+  lastItemSpawn: 0,
+  oceanTime: 0
+};
+
+const player = {
+  x:0, y:0, 
+  width:CONFIG.PLAYER.WIDTH, 
+  height:CONFIG.PLAYER.HEIGHT,
+  speed:CONFIG.PLAYER.SPEED,
+  hull:100, fuel:100, sails:100,
+  hullDecay:CONFIG.PLAYER.HULL_DECAY, 
+  fuelDecay:CONFIG.PLAYER.FUEL_DECAY, 
+  sailsDecay:CONFIG.PLAYER.SAILS_DECAY,
+  bobOffset: 0,
+  wakeTrail: []
+};
+
+let obstacles=[], items=[], keys={}, particles=[], touchState={left:false,right:false};
+let waterDroplets = [];
+let audioContext=null, audioInitialized=false;
+
+/* ------------ Audio system ------------ */
+function initAudio(){ 
+  if(audioInitialized) return;
+  try{ 
+    audioContext = new (window.AudioContext||window.webkitAudioContext)(); 
+    audioInitialized = true;
+  }catch(e){ console.warn('Audio not available:', e); } 
+}
+
+function beep(frequency=440, duration=120, type='sine', volume=1){
+  if(!audioContext || !audioInitialized) return;
+  try{
+    const oscillator = audioContext.createOscillator();
+    const gainNode = audioContext.createGain();
+    
+    oscillator.type = type;
+    oscillator.frequency.value = frequency;
+    oscillator.connect(gainNode);
+    gainNode.connect(audioContext.destination);
+    
+    const vol = CONFIG.AUDIO.MASTER_VOLUME * volume;
+    gainNode.gain.setValueAtTime(vol, audioContext.currentTime);
+    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + duration/1000);
+    
+    oscillator.start();
+    oscillator.stop(audioContext.currentTime + duration/1000);
+  }catch(e){ console.warn('Audio error:', e); }
+}
+
+/* ------------ Setup / lifecycle ------------ */
+function startGame(){
+  initAudio();
+  document.getElementById('menuScreen').style.display='none';
+  document.getElementById('gameCanvas').style.display='block';
+  document.getElementById('hud').style.display='flex';
+  document.getElementById('pauseBtn').style.display='block';
+  
+  if(game.isMobile){
+    document.getElementById('mobileControls').style.display='flex';
+    setupMobileControls();
+  }
+  
+  initGame();
+}
+
+function setupMobileControls(){
+  const leftBtn = document.getElementById('leftBtn');
+  const rightBtn = document.getElementById('rightBtn');
+  const mobilePauseBtn = document.getElementById('mobilePauseBtn');
+  
+  // Touch events for mobile controls
+  leftBtn.addEventListener('touchstart', (e) => {e.preventDefault(); touchState.left = true;});
+  leftBtn.addEventListener('touchend', (e) => {e.preventDefault(); touchState.left = false;});
+  
+  rightBtn.addEventListener('touchstart', (e) => {e.preventDefault(); touchState.right = true;});
+  rightBtn.addEventListener('touchend', (e) => {e.preventDefault(); touchState.right = false;});
+  
+  mobilePauseBtn.addEventListener('touchstart', (e) => {e.preventDefault(); togglePause();});
+  
+  // Prevent scrolling on mobile
+  document.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
+}
+
+function togglePause(){
+  game.paused = !game.paused;
+  document.getElementById('pauseScreen').style.display = game.paused ? 'flex' : 'none';
+}
+
+function initGame(){
+  game.canvas = document.getElementById('gameCanvas');
+  game.ctx = game.canvas.getContext('2d');
+  resizeCanvas();
+  window.addEventListener('resize', resizeCanvas);
+
+  // Reset state
+  Object.assign(game, {
+    distance:0, score:0, season:0, shakeTime:0, 
+    combo:0, comboTimer:0, paused:false,
+    lastObstacleSpawn:0, lastItemSpawn:0, oceanTime:0
+  });
+  
+  // Reset player position more safely
+  player.x = (game.width - player.width) / 2;
+  player.y = game.height - player.height - 30;
+  Object.assign(player, {hull:100, fuel:100, sails:100, bobOffset:0});
+  player.wakeTrail = [];
+  
+  // Clear arrays
+  obstacles.length = 0;
+  items.length = 0;
+  particles.length = 0;
+  waterDroplets.length = 0;
+
+  // Event listeners
+  document.addEventListener('keydown', onKeyDown);
+  document.addEventListener('keyup', onKeyUp);
+
+  game.running = true;
+  game.lastTime = performance.now();
+  requestAnimationFrame(gameLoop);
+}
+
+function restartGame(){
+  cleanup();
+  document.getElementById('gameOverScreen').style.display='none';
+  document.getElementById('pauseScreen').style.display='none';
+  startGame();
+}
+
+function returnToMenu(){
+  cleanup();
+  const elementsToHide = ['gameOverScreen', 'pauseScreen', 'gameCanvas', 'hud', 'pauseBtn', 'comboIndicator', 'mobileControls'];
+  elementsToHide.forEach(id => document.getElementById(id).style.display='none');
+  document.getElementById('menuScreen').style.display='flex';
+}
+
+function cleanup(){
+  game.running = false;
+  document.removeEventListener('keydown', onKeyDown);
+  document.removeEventListener('keyup', onKeyUp);
+  window.removeEventListener('resize', resizeCanvas);
+}
+
+function onKeyDown(e){
+  keys[e.code] = true;
+  if(e.code === 'Space'){
+    e.preventDefault();
+    togglePause();
+  }
+  if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.code)) {
+    e.preventDefault();
+  }
+}
+
+function onKeyUp(e){ 
+  keys[e.code] = false; 
+}
+
+function resizeCanvas(){
+  game.width = window.innerWidth; 
+  game.height = window.innerHeight;
+  if(!game.canvas) return;
+  
+  game.canvas.width = game.width; 
+  game.canvas.height = game.height;
+  
+  // Safely reposition player if needed
+  if(game.running){
+    player.x = Math.max(0, Math.min(player.x, game.width - player.width));
+    player.y = Math.max(0, Math.min(player.y, game.height - player.height));
+  }
+}
+
+/* ------------ Game Loop ------------ */
+function gameLoop(timestamp){
+  if(!game.running) return;
+  
+  const deltaTime = Math.min(0.05, Math.max(0.0001, (timestamp - game.lastTime) / 1000));
+  game.lastTime = timestamp;
+
+  if(!game.paused){
+    update(deltaTime);
+  }
+  render();
+  requestAnimationFrame(gameLoop);
+}
+
+/* ------------ Update Logic ------------ */
+function update(deltaTime){
+  game.oceanTime += deltaTime;
+  
+  const sailEfficiency = Math.max(0.3, player.sails / 100);
+  game.distance += 120 * deltaTime * sailEfficiency;
+
+  updateSeason();
+  updatePlayer(deltaTime, sailEfficiency);
+  updateOceanEffects(deltaTime);
+  updateSystems(deltaTime);
+  
+  if(player.hull <= 0 || player.fuel <= 0){ 
+    endGame(); 
+    return; 
+  }
+
+  spawnObjects(deltaTime);
+  updateGameObjects(deltaTime);
+  checkCollisions();
+  updateScore();
+  updateHUD();
+}
+
+function updateOceanEffects(deltaTime) {
+  // Update water droplets
+  for(let i = waterDroplets.length - 1; i >= 0; i--) {
+    const drop = waterDroplets[i];
+    drop.x += drop.vx * deltaTime;
+    drop.y += drop.vy * deltaTime;
+    drop.vy += 150 * deltaTime; // gravity
+    drop.life -= deltaTime;
+    drop.alpha = Math.max(0, drop.life / drop.maxLife);
+    
+    if(drop.life <= 0 || drop.y > game.height + 50) {
+      waterDroplets.splice(i, 1);
+    }
+  }
+  
+  // Update player's wake trail
+  if(player.wakeTrail.length > 20) {
+    player.wakeTrail.shift();
+  }
+  player.wakeTrail.push({
+    x: player.x + player.width/2,
+    y: player.y + player.height,
+    age: 0
+  });
+  
+  // Age wake trail
+  player.wakeTrail.forEach(wake => wake.age += deltaTime);
+  
+  // Update player bobbing motion
+  player.bobOffset = Math.sin(game.oceanTime * 2.5) * 3 + Math.sin(game.oceanTime * 1.8) * 1.5;
+}
+
+function createFoamParticle() {
+  // Foam particle creation removed for cleaner ocean
+}
+
+function createWaterDroplets(x, y, count = 5) {
+  for(let i = 0; i < count; i++) {
+    waterDroplets.push({
+      x: x + (Math.random() - 0.5) * 30,
+      y: y + (Math.random() - 0.5) * 20,
+      vx: (Math.random() - 0.5) * 100,
+      vy: -50 - Math.random() * 100,
+      life: 0.8 + Math.random() * 0.7,
+      maxLife: 0.8 + Math.random() * 0.7,
+      alpha: 0.8,
+      size: 1 + Math.random() * 3
+    });
+  }
+}
+
+function updateSeason(){
+  const newSeason = game.seasonThresholds.findIndex((threshold, i) => 
+    i === game.seasonThresholds.length - 1 || game.distance < game.seasonThresholds[i + 1]
+  );
+  
+  if(newSeason !== game.season && newSeason >= 0){
+    game.season = newSeason;
+    beep(220 + newSeason * 120, 200, 'triangle');
+    createParticles(player.x + player.width/2, player.y, '#ffffaa', 15);
+    showSeasonTransition();
+  }
+}
+
+function showSeasonTransition(){
+  const transition = document.createElement('div');
+  transition.className = 'season-transition';
+  document.getElementById('gameContainer').appendChild(transition);
+  setTimeout(() => transition.remove(), 1000);
+}
+
+function updatePlayer(deltaTime, sailEfficiency){
+  const moveSpeed = player.speed * (0.5 + sailEfficiency * 0.5);
+  
+  // Handle input (keyboard or touch)
+  if(keys['ArrowLeft'] || touchState.left) {
+    player.x -= moveSpeed;
+    // Create water splash effect when turning
+    if(Math.random() < 0.3) {
+      createWaterDroplets(player.x, player.y + player.height/2, 2);
+    }
+  }
+  if(keys['ArrowRight'] || touchState.right) {
+    player.x += moveSpeed;
+    if(Math.random() < 0.3) {
+      createWaterDroplets(player.x + player.width, player.y + player.height/2, 2);
+    }
+  }
+  
+  // Boundary checking
+  player.x = Math.max(0, Math.min(player.x, game.width - player.width));
+
+  // Resource decay with season difficulty
+  const decayMultiplier = 1 + game.season * 0.3;
+  player.hull = Math.max(0, player.hull - player.hullDecay * deltaTime * decayMultiplier);
+  player.fuel = Math.max(0, player.fuel - player.fuelDecay * deltaTime * decayMultiplier);
+  player.sails = Math.max(0, player.sails - player.sailsDecay * deltaTime * decayMultiplier);
+}
+
+function updateSystems(deltaTime){
+  if(game.shakeTime > 0) game.shakeTime -= deltaTime;
+
+  // Combo system
+  if(game.combo > 1){
+    game.comboTimer -= deltaTime;
+    if(game.comboTimer <= 0){
+      game.combo = 0;
+      document.getElementById('comboIndicator').style.display = 'none';
+    }
+  }
+}
+
+function spawnObjects(deltaTime){
+  const seasonMultiplier = 1 + game.season * 0.7;
+  const currentTime = performance.now();
+  
+  // Spawn obstacles with better timing
+  if(currentTime - game.lastObstacleSpawn > (800 / seasonMultiplier)){
+    if(Math.random() < CONFIG.SPAWN.OBSTACLE_BASE_CHANCE * seasonMultiplier){
+      spawnObstacle();
+      game.lastObstacleSpawn = currentTime;
+    }
+  }
+  
+  // Spawn items with better timing
+  if(currentTime - game.lastItemSpawn > 1200){
+    if(Math.random() < CONFIG.SPAWN.ITEM_BASE_CHANCE){
+      spawnItem();
+      game.lastItemSpawn = currentTime;
+    }
+  }
+}
+
+function spawnObstacle(){
+  const size = 35 + Math.random() * 20;
+  
+  obstacles.push({
+    x: Math.random() * (game.width - size),
+    y: -60,
+    width: size,
+    height: size * 1.2,
+    speed: 2 + game.season * 1.1 + Math.random() * 1.8,
+    type: 'enemyShip',
+    rotation: 0,
+    rotationSpeed: 0,
+    wakeTrail: []
+  });
+}
+
+function spawnItem(){
+  items.push({
+    x: Math.random() * (game.width - 26),
+    y: -26,
+    width: 26,
+    height: 26,
+    speed: 1.6 + game.season * 0.6,
+    type: Math.random() < 0.5 ? 'fuel' : 'repair',
+    bobOffset: Math.random() * Math.PI * 2,
+    sparkleTime: 0
+  });
+}
+
+function updateGameObjects(deltaTime){
+  // Update obstacles
+  for(let i = obstacles.length - 1; i >= 0; i--){
+    const obstacle = obstacles[i];
+    obstacle.y += obstacle.speed;
+    obstacle.rotation += obstacle.rotationSpeed * deltaTime;
+    
+    // Update obstacle wake trail
+    if(obstacle.wakeTrail.length > 10) {
+      obstacle.wakeTrail.shift();
+    }
+    obstacle.wakeTrail.push({
+      x: obstacle.x + obstacle.width/2,
+      y: obstacle.y + obstacle.height,
+      age: 0
+    });
+    obstacle.wakeTrail.forEach(wake => wake.age += deltaTime);
+    
+    if(obstacle.y > game.height + 100){
+      obstacles.splice(i, 1);
+    }
+  }
+  
+  // Update items
+  for(let i = items.length - 1; i >= 0; i--){
+    const item = items[i];
+    item.y += item.speed;
+    item.sparkleTime += deltaTime;
+    
+    if(item.y > game.height + 50){
+      items.splice(i, 1);
+    }
+  }
+  
+  // Update particles
+  updateParticles(deltaTime);
+}
+
+function updateParticles(deltaTime){
+  for(let i = particles.length - 1; i >= 0; i--){
+    const particle = particles[i];
+    particle.x += particle.vx * deltaTime;
+    particle.y += particle.vy * deltaTime;
+    particle.life -= deltaTime;
+    particle.alpha = Math.max(0, particle.life / particle.maxLife);
+    
+    if(particle.life <= 0){
+      particles.splice(i, 1);
+    }
+  }
+}
+
+function createParticles(x, y, color, count = 8){
+  for(let i = 0; i < count; i++){
+    particles.push({
+      x: x + (Math.random() - 0.5) * 20,
+      y: y + (Math.random() - 0.5) * 20,
+      vx: (Math.random() - 0.5) * 150,
+      vy: (Math.random() - 0.5) * 150,
+      color,
+      life: 0.6 + Math.random() * 0.4,
+      maxLife: 0.6 + Math.random() * 0.4,
+      alpha: 1,
+      size: 2 + Math.random() * 4
+    });
+  }
+}
+
+/* ------------ Collision Detection ------------ */
+function aabb(a, b){
+  return a.x < b.x + b.width && 
+         a.x + a.width > b.x && 
+         a.y < b.y + b.height && 
+         a.y + a.height > b.y;
+}
+
+function checkCollisions(){
+  // Check obstacle collisions
+  for(let i = obstacles.length - 1; i >= 0; i--){
+    const obstacle = obstacles[i];
+    if(aabb(player, obstacle)){
+      obstacles.splice(i, 1);
+      handleObstacleHit(obstacle);
+    }
+  }
+  
+  // Check item collisions
+  for(let i = items.length - 1; i >= 0; i--){
+    const item = items[i];
+    if(aabb(player, item)){
+      items.splice(i, 1);
+      handleItemCollection(item);
+    }
+  }
+}
+
+function handleObstacleHit(obstacle){
+  game.combo = 0;
+  document.getElementById('comboIndicator').style.display = 'none';
+  
+  player.hull -= 22;
+  
+  beep(160, 280, 'sawtooth');
+  createParticles(
+    obstacle.x + obstacle.width/2, 
+    obstacle.y + obstacle.height/2, 
+    '#ff4444', 
+    12
+  );
+  
+  // Create dramatic water splash
+  createWaterDroplets(obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2, 15);
+  
+  triggerScreenShake();
+}
+
+function handleItemCollection(item){
+  // Combo system
+  game.combo++;
+  game.comboTimer = CONFIG.COMBO.DURATION;
+  
+  const baseBonus = item.type === 'fuel' ? 50 : 75;
+  const comboBonus = baseBonus * (game.combo - 1);
+  game.score += comboBonus;
+  
+  if(game.combo > 1){
+    document.getElementById('comboCount').textContent = game.combo;
+    document.getElementById('comboBonus').textContent = comboBonus;
+    document.getElementById('comboIndicator').style.display = 'block';
+  }
+  
+  if(item.type === 'fuel'){
+    player.fuel = Math.min(100, player.fuel + 30);
+    beep(420, 140, 'sine');
+    createParticles(item.x + item.width/2, item.y + item.height/2, '#ff9900', 10);
+  } else {
+    player.hull = Math.min(100, player.hull + 35);
+    player.sails = Math.min(100, player.sails + 20);
+    beep(520, 140, 'sine');
+    createParticles(item.x + item.width/2, item.y + item.height/2, '#32cd32', 10);
+  }
+  
+  // Small water splash on item collection
+  createWaterDroplets(item.x + item.width/2, item.y + item.height/2, 3);
+}
+
+function triggerScreenShake(){
+  game.shakeTime = 0.28;
+  const gameContainer = document.getElementById('gameContainer');
+  gameContainer.classList.add('shake');
+  setTimeout(() => gameContainer.classList.remove('shake'), 280);
+}
+
+function updateScore(){
+  const comboMultiplier = game.combo > 1 ? 1 + (game.combo - 1) * CONFIG.COMBO.MULTIPLIER : 1;
+  game.score = Math.floor(game.distance * game.seasonMultipliers[game.season] * comboMultiplier);
+}
+
+/* ------------ Rendering ------------ */
+function render(){
+  const ctx = game.ctx;
+  
+  // Screen shake effect
+  if(game.shakeTime > 0){
+    ctx.save();
+    const intensity = game.shakeTime * 15;
+    ctx.translate(
+      (Math.random() - 0.5) * intensity,
+      (Math.random() - 0.5) * intensity
+    );
+  }
+
+  // Enhanced ocean background
+  renderRealisticOcean(ctx);
+  renderPlayer(ctx);
+  renderObstacles(ctx);
+  renderItems(ctx);
+  renderOceanEffects(ctx);
+  renderParticles(ctx);
+
+  if(game.shakeTime > 0) ctx.restore();
+}
+
+function renderRealisticOcean(ctx) {
+  // Multi-layered water depth effect
+  const gradient = ctx.createLinearGradient(0, 0, 0, game.height);
+  
+  // Season-specific water colors
+  const waterColorSets = [
+    // Summer - bright tropical blue
+    {
+      surface: '#87CEEB',
+      shallow: '#4682B4', 
+      deep: '#191970',
+      accent: '#20B2AA'
+    },
+    // Autumn - deeper, more muted
+    {
+      surface: '#6B8DB5',
+      shallow: '#2F4F4F',
+      deep: '#1C3A3A',
+      accent: '#4682B4'
+    },
+    // Winter - cold, steel blue
+    {
+      surface: '#B0C4DE',
+      shallow: '#4682B4',
+      deep: '#0F1B44',
+      accent: '#87CEFA'
+    },
+    // Storm - dark, violent seas
+    {
+      surface: '#2F2F2F',
+      shallow: '#1C1C1C',
+      deep: '#000000',
+      accent: '#4B0082'
+    }
+  ];
+  
+  const colors = waterColorSets[game.season];
+  
+  // Create depth gradient
+  gradient.addColorStop(0, colors.surface);
+  gradient.addColorStop(0.3, colors.shallow);
+  gradient.addColorStop(0.7, colors.deep);
+  gradient.addColorStop(1, colors.deep);
+  
+  ctx.fillStyle = gradient;
+  ctx.fillRect(0, 0, game.width, game.height);
+  
+  // Ocean floor suggestion (distant)
+  renderOceanFloor(ctx);
+}
+
+function renderWaterCaustics(ctx, accentColor) {
+  // Caustics rendering removed for cleaner ocean
+}
+
+function renderRealisticWaves(ctx) {
+  // Wave rendering removed - keeping smooth ocean surface
+}
+
+function renderOceanFloor(ctx) {
+  // Subtle ocean floor texture in deep water
+  const floorY = game.height * 0.85;
+  const time = game.oceanTime;
+  
+  ctx.save();
+  ctx.globalAlpha = 0.1;
+  
+  // Sandy bottom suggestion
+  const floorGradient = ctx.createLinearGradient(0, floorY, 0, game.height);
+  floorGradient.addColorStop(0, 'transparent');
+  floorGradient.addColorStop(0.3, 'rgba(139,126,102,0.3)');
+  floorGradient.addColorStop(1, 'rgba(101,67,33,0.5)');
+  
+  ctx.fillStyle = floorGradient;
+  ctx.fillRect(0, floorY, game.width, game.height - floorY);
+  
+  // Subtle seaweed/coral suggestions
+  ctx.strokeStyle = 'rgba(34,139,34,0.4)';
+  ctx.lineWidth = 2;
+  
+  for(let i = 0; i < 12; i++) {
+    const x = (game.width / 12) * i + Math.sin(time + i) * 20;
+    const height = 30 + Math.sin(time * 0.7 + i) * 15;
+    
+    ctx.beginPath();
+    ctx.moveTo(x, game.height);
+    ctx.quadraticCurveTo(
+      x + Math.sin(time + i) * 10, 
+      game.height - height/2,
+      x + Math.sin(time * 1.2 + i) * 8, 
+      game.height - height
+    );
+    ctx.stroke();
+  }
+  
+  ctx.restore();
+}
+
+function renderOceanEffects(ctx) {
+  // Render water droplets
+  waterDroplets.forEach(drop => {
+    ctx.save();
+    ctx.globalAlpha = drop.alpha;
+    ctx.fillStyle = 'rgba(173,216,230,0.8)';
+    
+    // Simple droplet shape
+    ctx.beginPath();
+    ctx.arc(drop.x, drop.y, drop.size, 0, Math.PI * 2);
+    ctx.fill();
+    
+    // Highlight
+    ctx.fillStyle = 'rgba(255,255,255,0.6)';
+    ctx.beginPath();
+    ctx.arc(drop.x - drop.size * 0.3, drop.y - drop.size * 0.3, drop.size * 0.4, 0, Math.PI * 2);
+    ctx.fill();
+    
+    ctx.restore();
+  });
+  
+  // Render wake trails
+  renderWakeTrail(ctx, player.wakeTrail, 'rgba(255,255,255,0.4)');
+  
+  obstacles.forEach(obstacle => {
+    renderWakeTrail(ctx, obstacle.wakeTrail, 'rgba(50,50,50,0.3)');
+  });
+}
+
+function renderWakeTrail(ctx, trail, color) {
+  if(trail.length < 2) return;
+  
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 3;
+  ctx.lineCap = 'round';
+  
+  ctx.beginPath();
+  for(let i = 0; i < trail.length - 1; i++) {
+    const wake = trail[i];
+    const nextWake = trail[i + 1];
+    const alpha = Math.max(0, 1 - wake.age / 2); // Fade over 2 seconds
+    
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    
+    if(i === 0) {
+      ctx.moveTo(wake.x, wake.y);
+    } else {
+      ctx.lineTo(wake.x, wake.y);
+    }
+    
+    ctx.restore();
+  }
+  ctx.stroke();
+  
+  ctx.restore();
+}
+
+function renderPlayer(ctx){
+  // Apply bobbing motion from ocean
+  const playerY = player.y + player.bobOffset;
+  drawPlayerShip(ctx, player.x, playerY, player.width, player.height);
+}
+
+function renderObstacles(ctx){
+  obstacles.forEach(obstacle => {
+    // Add slight bobbing to obstacles too
+    const bobbing = Math.sin(game.oceanTime * 2 + obstacle.x * 0.01) * 2;
+    obstacle.renderY = obstacle.y + bobbing;
+    drawEnemyShip(ctx, obstacle);
+  });
+}
+
+function renderItems(ctx){
+  items.forEach(item => {
+    const bobOffset = Math.sin(item.sparkleTime * 3 + item.bobOffset) * 4;
+    // Add water bobbing effect
+    const waterBob = Math.sin(game.oceanTime * 2.5 + item.x * 0.02) * 1.5;
+    drawItem(ctx, item, bobOffset + waterBob);
+  });
+}
+
+function renderParticles(ctx){
+  particles.forEach(particle => {
+    ctx.save();
+    ctx.globalAlpha = particle.alpha;
+    ctx.fillStyle = particle.color;
+    ctx.fillRect(
+      particle.x - particle.size/2,
+      particle.y - particle.size/2,
+      particle.size,
+      particle.size
+    );
+    ctx.restore();
+  });
+}
+
+/* ------------ Drawing Functions ------------ */
+function drawPlayerShip(ctx, x, y, width, height){
+  ctx.save();
+  ctx.translate(x + width/2, y + height/2);
+
+  // Hull with damage indication
+  const hullColor = player.hull > 75 ? '#f2f6ff' : 
+                   player.hull > 50 ? '#f0f0e0' : 
+                   player.hull > 25 ? '#e8e0d0' : '#d0c0b0';
+  
+  ctx.fillStyle = hullColor;
+  ctx.beginPath();
+  ctx.moveTo(0, -height * 0.55);
+  ctx.quadraticCurveTo(width * 0.45, -height * 0.25, width * 0.38, height * 0.40);
+  ctx.lineTo(-width * 0.38, height * 0.40);
+  ctx.quadraticCurveTo(-width * 0.45, -height * 0.25, 0, -height * 0.55);
+  ctx.closePath();
+  ctx.fill();
+
+  // Water line and reflection
+  ctx.strokeStyle = 'rgba(70,130,180,0.6)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.35, height * 0.35);
+  ctx.lineTo(width * 0.35, height * 0.35);
+  ctx.stroke();
+
+  // Hull reflection in water
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.fillStyle = hullColor;
+  ctx.scale(1, -0.3);
+  ctx.translate(0, -height * 1.4);
+  ctx.beginPath();
+  ctx.moveTo(0, -height * 0.55);
+  ctx.quadraticCurveTo(width * 0.45, -height * 0.25, width * 0.38, height * 0.40);
+  ctx.lineTo(-width * 0.38, height * 0.40);
+  ctx.quadraticCurveTo(-width * 0.45, -height * 0.25, 0, -height * 0.55);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Deck details
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(-width * 0.32, height * 0.30);
+  ctx.lineTo(width * 0.32, height * 0.30);
+  ctx.stroke();
+
+  // Mast
+  ctx.fillStyle = '#c9d3e7';
+  ctx.fillRect(-2, -height * 0.48, 4, height * 0.78);
+
+  // Sails with health-based opacity and wind effect
+  const sailAlpha = 0.85 * Math.max(0.25, player.sails / 100);
+  const windEffect = Math.sin(game.oceanTime * 3) * 2;
+  
+  ctx.fillStyle = `rgba(255,255,255,${sailAlpha})`;
+  
+  // Main sail with wind billowing
+  ctx.beginPath();
+  ctx.moveTo(0, -height * 0.45);
+  ctx.quadraticCurveTo(width * 0.30 + windEffect, -height * 0.25, width * 0.30, -height * 0.05);
+  ctx.lineTo(0, -height * 0.05);
+  ctx.closePath();
+  ctx.fill();
+  
+  // Jib sail
+  ctx.beginPath();
+  ctx.moveTo(0, -height * 0.35);
+  ctx.quadraticCurveTo(-width * 0.28 - windEffect * 0.5, -height * 0.15, -width * 0.28, 0);
+  ctx.lineTo(0, 0);
+  ctx.closePath();
+  ctx.fill();
+
+  // Enhanced wake effect
+  const wakeAlpha = 0.6 + Math.sin(game.oceanTime * 4) * 0.2;
+  ctx.fillStyle = `rgba(255,255,255,${wakeAlpha})`;
+  ctx.fillRect(-width * 0.22, height * 0.45, width * 0.44, 3);
+  
+  ctx.fillStyle = `rgba(255,255,255,${wakeAlpha * 0.7})`;
+  ctx.fillRect(-width * 0.16, height * 0.50, width * 0.32, 2);
+  ctx.fillRect(-width * 0.10, height * 0.55, width * 0.20, 1);
+
+  // Damage indicators
+  if(player.hull < 50){
+    ctx.fillStyle = player.hull < 25 ? '#ff3333' : '#ff9900';
+    const damageCount = player.hull < 25 ? 4 : 2;
+    for(let i = 0; i < damageCount; i++){
+      const dx = (Math.random() - 0.5) * width * 0.6;
+      const dy = (Math.random() - 0.5) * height * 0.4;
+      ctx.fillRect(dx - 2, dy - 2, 4, 4);
+    }
+  }
+
+  ctx.restore();
+}
+
+function drawEnemyShip(ctx, enemy){
+  const renderY = enemy.renderY || enemy.y;
+  
+  ctx.save();
+  ctx.translate(enemy.x + enemy.width/2, renderY + enemy.height/2);
+  
+  // Main hull
+  ctx.fillStyle = '#0b0b0b';
+  ctx.beginPath();
+  ctx.moveTo(0, enemy.height * 0.50);
+  ctx.quadraticCurveTo(enemy.width * 0.48, enemy.height * 0.18, enemy.width * 0.36, -enemy.height * 0.42);
+  ctx.lineTo(-enemy.width * 0.36, -enemy.height * 0.42);
+  ctx.quadraticCurveTo(-enemy.width * 0.48, enemy.height * 0.18, 0, enemy.height * 0.50);
+  ctx.closePath();
+  ctx.fill();
+
+  // Hull reflection
+  ctx.save();
+  ctx.globalAlpha = 0.2;
+  ctx.fillStyle = '#0b0b0b';
+  ctx.scale(1, -0.2);
+  ctx.translate(0, -enemy.height * 1.5);
+  ctx.beginPath();
+  ctx.moveTo(0, enemy.height * 0.50);
+  ctx.quadraticCurveTo(enemy.width * 0.48, enemy.height * 0.18, enemy.width * 0.36, -enemy.height * 0.42);
+  ctx.lineTo(-enemy.width * 0.36, -enemy.height * 0.42);
+  ctx.quadraticCurveTo(-enemy.width * 0.48, enemy.height * 0.18, 0, enemy.height * 0.50);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+
+  // Bridge/command structure
+  ctx.fillStyle = '#1a1a1a';
+  ctx.fillRect(-enemy.width * 0.16, -enemy.height * 0.18, enemy.width * 0.32, enemy.height * 0.18);
+  
+  // Gun turret
+  ctx.fillStyle = '#0d0d0d';
+  ctx.fillRect(-3, -enemy.height * 0.10, 6, enemy.height * 0.20);
+  
+  // Enemy wake
+  ctx.fillStyle = 'rgba(50,50,50,0.4)';
+  ctx.fillRect(-enemy.width * 0.2, enemy.height * 0.45, enemy.width * 0.4, 2);
+  
+  ctx.restore();
+}
+
+function drawItem(ctx, item, bobOffset){
+  ctx.save();
+  ctx.translate(item.x + item.width/2, item.y + item.height/2 + bobOffset);
+  
+  // Add water reflection for items
+  ctx.save();
+  ctx.globalAlpha = 0.3;
+  ctx.scale(1, -0.4);
+  ctx.translate(0, item.height);
+  
+  if(item.type === 'fuel'){
+    ctx.fillStyle = '#ff6600';
+    ctx.fillRect(-item.width/2, -item.height/2, item.width, item.height);
+  } else {
+    ctx.fillStyle = '#228b22';
+    ctx.fillRect(-item.width/2, -item.height/2, item.width, item.height);
+  }
+  ctx.restore();
+  
+  // Draw main item
+  if(item.type === 'fuel'){
+    // Fuel canister
+    ctx.fillStyle = '#ff6600';
+    ctx.fillRect(-item.width/2, -item.height/2, item.width, item.height);
+    ctx.fillStyle = '#ff9900';
+    ctx.fillRect(-item.width/2 + 2, -item.height/2 + 2, item.width - 4, item.height - 4);
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'center';
+    ctx.fillText('F', 0, 4);
+  } else {
+    // Repair kit (cross symbol)
+    ctx.fillStyle = '#228b22';
+    ctx.fillRect(-item.width/2, -item.height/2, item.width, item.height);
+    ctx.fillStyle = '#32cd32';
+    ctx.fillRect(-item.width/2 + 2, -item.height/2 + 2, item.width - 4, item.height - 4);
+    ctx.fillStyle = '#fff';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(-8, 0);
+    ctx.lineTo(8, 0);
+    ctx.moveTo(0, -8);
+    ctx.lineTo(0, 8);
+    ctx.stroke();
+  }
+  
+  // Enhanced sparkle effect with water interaction
+  if(Math.sin(item.sparkleTime * 8) > 0.5){
+    ctx.strokeStyle = 'rgba(255,255,255,0.8)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, 0, item.width/2 + 4, 0, Math.PI * 2);
+    ctx.stroke();
+    
+    // Water ripples around item
+    ctx.strokeStyle = 'rgba(173,216,230,0.5)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.arc(0, item.height/2 + 5, item.width/2 + 8, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  
+  ctx.restore();
+}
+
+/* ------------ HUD Updates ------------ */
+function updateHUD(){
+  const distance = Math.max(0, Math.floor(game.distance / 1000));
+  const score = Math.max(0, Math.floor(game.score));
+  
+  document.getElementById('distance').textContent = distance + 'km';
+  document.getElementById('score').textContent = score.toLocaleString();
+
+  const seasonElement = document.getElementById('season');
+  seasonElement.textContent = game.seasonNames[game.season];
+  seasonElement.className = 'season-indicator ' + game.seasonClasses[game.season];
+
+  const hull = Math.max(0, Math.round(player.hull));
+  const fuel = Math.max(0, Math.round(player.fuel));
+
+  document.getElementById('hullPercent').textContent = hull + '%';
+  document.getElementById('fuelPercent').textContent = fuel + '%';
+  document.getElementById('hullBar').style.width = hull + '%';
+  document.getElementById('fuelBar').style.width = fuel + '%';
+}
+
+/* ------------ Game End ------------ */
+function endGame(){
+  cleanup();
+  
+  // Death sound sequence
+  beep(220, 420, 'sawtooth');
+  setTimeout(() => beep(160, 420, 'sawtooth'), 200);
+  setTimeout(() => beep(110, 620, 'sawtooth'), 420);
+  
+  const distance = Math.max(0, Math.floor(game.distance / 1000));
+  const score = Math.max(0, Math.floor(game.score));
+  
+  document.getElementById('finalDistance').textContent = distance + ' km';
+  document.getElementById('finalScore').textContent = score.toLocaleString();
+  document.getElementById('finalSeason').textContent = game.seasonNames[game.season];
+  document.getElementById('gameOverScreen').style.display = 'flex';
+}
+
+/* ------------ Initialization ------------ */
+window.addEventListener('load', () => {
+  game.canvas = document.getElementById('gameCanvas');
+  if(game.canvas) {
+    game.ctx = game.canvas.getContext('2d');
+    resizeCanvas();
+  }
+  
+  // Detect mobile and show appropriate controls info
+  if(game.isMobile) {
+    const controlsText = document.querySelector('.controls');
+    if(controlsText) {
+      controlsText.innerHTML = 'Touch the left/right buttons to steer • Touch pause to pause<br><small>Keyboard controls also available</small>';
+    }
+  }
+});
+</script>
+</body>
+</html>
