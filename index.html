@@ -87,20 +87,18 @@
                      opacity:0;animation:seasonFlash 1s ease-out}
   @keyframes seasonFlash{0%{opacity:0}30%{opacity:1}100%{opacity:0}}
 
-  /* Mobile touch controls */
-  .mobile-controls{position:absolute;bottom:20px;left:50%;transform:translateX(-50%);
-                   display:none;z-index:6;gap:20px}
-  .touch-btn{width:60px;height:60px;border-radius:50%;background:rgba(0,20,40,.8);
-             border:2px solid rgba(135,206,235,.4);color:#fff;font-size:24px;
-             display:flex;align-items:center;justify-content:center;
-             user-select:none;touch-action:none}
+  /* Mobile touch controls - invisible screen areas */
+  .mobile-touch-area{position:absolute;top:0;width:50%;height:100%;z-index:3;
+                     user-select:none;touch-action:none;opacity:0}
+  .mobile-touch-left{left:0}
+  .mobile-touch-right{right:0}
 
   @media (max-width: 768px) {
-    .mobile-controls{display:flex}
     .title{font-size:2.5rem}
     .subtitle{font-size:14px}
     .hud-label{font-size:13px}
     .hud-value{font-size:15px}
+    .pause-btn{display:block !important}
   }
 </style>
 </head>
@@ -156,12 +154,9 @@
     </div>
   </div>
 
-  <!-- Mobile Controls -->
-  <div class="mobile-controls" id="mobileControls" style="display:none">
-    <div class="touch-btn" id="leftBtn">←</div>
-    <div class="touch-btn" id="mobilePauseBtn">⏸</div>
-    <div class="touch-btn" id="rightBtn">→</div>
-  </div>
+  <!-- Mobile Touch Areas (invisible) -->
+  <div class="mobile-touch-area mobile-touch-left" id="mobileLeftArea" style="display:none"></div>
+  <div class="mobile-touch-area mobile-touch-right" id="mobileRightArea" style="display:none"></div>
 
   <!-- Menu Button -->
   <div class="pause-btn" id="pauseBtn" style="display:none" onclick="togglePause()">☰</div>
@@ -259,13 +254,38 @@ let obstacles=[], items=[], keys={}, particles=[], touchState={left:false,right:
 let waterDroplets = [];
 let audioContext=null, audioInitialized=false;
 
+// Store references for proper cleanup
+let mobileEventListeners = [];
+
 /* ------------ Audio system ------------ */
 function initAudio(){ 
-  if(audioInitialized) return;
+  if(audioInitialized || audioContext) return;
   try{ 
     audioContext = new (window.AudioContext||window.webkitAudioContext)(); 
-    audioInitialized = true;
-  }catch(e){ console.warn('Audio not available:', e); } 
+    
+    // Handle audio context state properly
+    if(audioContext.state === 'suspended') {
+      // Modern browsers require user interaction
+      const resumeAudio = () => {
+        if(audioContext && audioContext.state === 'suspended') {
+          audioContext.resume().then(() => {
+            audioInitialized = true;
+          }).catch(e => console.warn('Audio resume failed:', e));
+        }
+        // Remove the listener after first interaction
+        document.removeEventListener('touchstart', resumeAudio);
+        document.removeEventListener('click', resumeAudio);
+      };
+      
+      document.addEventListener('touchstart', resumeAudio);
+      document.addEventListener('click', resumeAudio);
+    } else {
+      audioInitialized = true;
+    }
+  }catch(e){ 
+    console.warn('Audio not available:', e); 
+    audioContext = null;
+  } 
 }
 
 function beep(frequency=440, duration=120, type='sine', volume=1){
@@ -297,7 +317,8 @@ function startGame(){
   document.getElementById('pauseBtn').style.display='block';
   
   if(game.isMobile){
-    document.getElementById('mobileControls').style.display='flex';
+    document.getElementById('mobileLeftArea').style.display='block';
+    document.getElementById('mobileRightArea').style.display='block';
     setupMobileControls();
   }
   
@@ -305,21 +326,43 @@ function startGame(){
 }
 
 function setupMobileControls(){
-  const leftBtn = document.getElementById('leftBtn');
-  const rightBtn = document.getElementById('rightBtn');
-  const mobilePauseBtn = document.getElementById('mobilePauseBtn');
+  const leftArea = document.getElementById('mobileLeftArea');
+  const rightArea = document.getElementById('mobileRightArea');
   
-  // Touch events for mobile controls
-  leftBtn.addEventListener('touchstart', (e) => {e.preventDefault(); touchState.left = true;});
-  leftBtn.addEventListener('touchend', (e) => {e.preventDefault(); touchState.left = false;});
+  // Define event handlers for proper cleanup
+  const leftTouchStart = (e) => {
+    e.preventDefault(); 
+    touchState.left = true;
+  };
+  const leftTouchEnd = (e) => {
+    e.preventDefault(); 
+    touchState.left = false;
+  };
+  const rightTouchStart = (e) => {
+    e.preventDefault(); 
+    touchState.right = true;
+  };
+  const rightTouchEnd = (e) => {
+    e.preventDefault(); 
+    touchState.right = false;
+  };
+  const preventMove = (e) => e.preventDefault();
   
-  rightBtn.addEventListener('touchstart', (e) => {e.preventDefault(); touchState.right = true;});
-  rightBtn.addEventListener('touchend', (e) => {e.preventDefault(); touchState.right = false;});
+  // Add event listeners and store references
+  leftArea.addEventListener('touchstart', leftTouchStart);
+  leftArea.addEventListener('touchend', leftTouchEnd);
+  rightArea.addEventListener('touchstart', rightTouchStart);
+  rightArea.addEventListener('touchend', rightTouchEnd);
+  document.addEventListener('touchmove', preventMove, {passive: false});
   
-  mobilePauseBtn.addEventListener('touchstart', (e) => {e.preventDefault(); togglePause();});
-  
-  // Prevent scrolling on mobile
-  document.addEventListener('touchmove', (e) => e.preventDefault(), {passive: false});
+  // Store for cleanup
+  mobileEventListeners = [
+    {element: leftArea, event: 'touchstart', handler: leftTouchStart},
+    {element: leftArea, event: 'touchend', handler: leftTouchEnd},
+    {element: rightArea, event: 'touchstart', handler: rightTouchStart},
+    {element: rightArea, event: 'touchend', handler: rightTouchEnd},
+    {element: document, event: 'touchmove', handler: preventMove}
+  ];
 }
 
 function togglePause(){
@@ -370,7 +413,7 @@ function restartGame(){
 
 function returnToMenu(){
   cleanup();
-  const elementsToHide = ['gameOverScreen', 'pauseScreen', 'gameCanvas', 'hud', 'pauseBtn', 'comboIndicator', 'mobileControls'];
+  const elementsToHide = ['gameOverScreen', 'pauseScreen', 'gameCanvas', 'hud', 'pauseBtn', 'comboIndicator', 'mobileLeftArea', 'mobileRightArea'];
   elementsToHide.forEach(id => document.getElementById(id).style.display='none');
   document.getElementById('menuScreen').style.display='flex';
 }
@@ -380,6 +423,23 @@ function cleanup(){
   document.removeEventListener('keydown', onKeyDown);
   document.removeEventListener('keyup', onKeyUp);
   window.removeEventListener('resize', resizeCanvas);
+  
+  // Clean up mobile event listeners
+  mobileEventListeners.forEach(({element, event, handler}) => {
+    element.removeEventListener(event, handler);
+  });
+  mobileEventListeners = [];
+  
+  // Properly close audio context if it exists
+  if(audioContext && audioContext.state !== 'closed') {
+    try {
+      audioContext.close();
+      audioContext = null;
+      audioInitialized = false;
+    } catch(e) {
+      console.warn('Error closing audio context:', e);
+    }
+  }
 }
 
 function onKeyDown(e){
@@ -398,8 +458,10 @@ function onKeyUp(e){
 }
 
 function resizeCanvas(){
-  game.width = window.innerWidth; 
-  game.height = window.innerHeight;
+  // Ensure minimum viable game area
+  game.width = Math.max(320, window.innerWidth); 
+  game.height = Math.max(480, window.innerHeight);
+  
   if(!game.canvas) return;
   
   game.canvas.width = game.width; 
@@ -409,6 +471,11 @@ function resizeCanvas(){
   if(game.running){
     player.x = Math.max(0, Math.min(player.x, game.width - player.width));
     player.y = Math.max(0, Math.min(player.y, game.height - player.height));
+    
+    // Ensure player stays in playable area on very small screens
+    if(game.width < 400) {
+      player.x = Math.max(10, Math.min(player.x, game.width - player.width - 10));
+    }
   }
 }
 
@@ -451,7 +518,7 @@ function update(deltaTime){
 }
 
 function updateOceanEffects(deltaTime) {
-  // Update water droplets
+  // Update water droplets with memory management
   for(let i = waterDroplets.length - 1; i >= 0; i--) {
     const drop = waterDroplets[i];
     drop.x += drop.vx * deltaTime;
@@ -463,6 +530,11 @@ function updateOceanEffects(deltaTime) {
     if(drop.life <= 0 || drop.y > game.height + 50) {
       waterDroplets.splice(i, 1);
     }
+  }
+  
+  // Cap water droplets to prevent memory issues
+  if(waterDroplets.length > 100) {
+    waterDroplets.splice(0, waterDroplets.length - 100);
   }
   
   // Update player's wake trail
@@ -482,10 +554,6 @@ function updateOceanEffects(deltaTime) {
   player.bobOffset = Math.sin(game.oceanTime * 2.5) * 3 + Math.sin(game.oceanTime * 1.8) * 1.5;
 }
 
-function createFoamParticle() {
-  // Foam particle creation removed for cleaner ocean
-}
-
 function createWaterDroplets(x, y, count = 5) {
   for(let i = 0; i < count; i++) {
     waterDroplets.push({
@@ -495,8 +563,8 @@ function createWaterDroplets(x, y, count = 5) {
       vy: -50 - Math.random() * 100,
       life: 0.8 + Math.random() * 0.7,
       maxLife: 0.8 + Math.random() * 0.7,
-      alpha: 0.8,
-      size: 1 + Math.random() * 3
+      alpha: 1,
+      size: 2 + Math.random() * 4
     });
   }
 }
@@ -661,6 +729,11 @@ function updateParticles(deltaTime){
     if(particle.life <= 0){
       particles.splice(i, 1);
     }
+  }
+  
+  // Cap particles to prevent memory issues
+  if(particles.length > 150) {
+    particles.splice(0, particles.length - 150);
   }
 }
 
@@ -846,17 +919,10 @@ function renderRealisticOcean(ctx) {
   renderOceanFloor(ctx);
 }
 
-function renderWaterCaustics(ctx, accentColor) {
-  // Caustics rendering removed for cleaner ocean
-}
-
-function renderRealisticWaves(ctx) {
-  // Wave rendering removed - keeping smooth ocean surface
-}
-
 function renderOceanFloor(ctx) {
-  // Subtle ocean floor texture in deep water
+  // Subtle ocean floor texture in deep water - FIXED
   const floorY = game.height * 0.85;
+  const floorHeight = game.height - floorY; // Calculate proper height
   const time = game.oceanTime;
   
   ctx.save();
@@ -869,7 +935,8 @@ function renderOceanFloor(ctx) {
   floorGradient.addColorStop(1, 'rgba(101,67,33,0.5)');
   
   ctx.fillStyle = floorGradient;
-  ctx.fillRect(0, floorY, game.width, game.height - floorY);
+  // FIXED: Use proper width and height
+  ctx.fillRect(0, floorY, game.width, floorHeight);
   
   // Subtle seaweed/coral suggestions
   ctx.strokeStyle = 'rgba(34,139,34,0.4)';
@@ -1252,7 +1319,7 @@ window.addEventListener('load', () => {
   if(game.isMobile) {
     const controlsText = document.querySelector('.controls');
     if(controlsText) {
-      controlsText.innerHTML = 'Touch the left/right buttons to steer • Touch pause to pause<br><small>Keyboard controls also available</small>';
+      controlsText.innerHTML = 'Touch left/right sides of screen to steer • Touch ☰ to pause<br><small>Keyboard controls also available</small>';
     }
   }
 });
