@@ -2,14 +2,21 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
 <title>Ocean's Edge</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    position: fixed;
+    -webkit-overflow-scrolling: touch;
+  }
   body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,'Helvetica Neue',Arial;
-       background:#001122;overflow:hidden;height:100vh;user-select:none;touch-action:none}
-  #gameContainer{position:relative;width:100vw;height:100vh}
-  #gameCanvas{display:block}
+       background:#001122;overflow:hidden;height:100vh;height:100dvh;user-select:none;touch-action:none}
+  #gameContainer{position:relative;width:100vw;width:100dvw;height:100vh;height:100dvh;overflow:hidden}
+  #gameCanvas{display:block;width:100%;height:100%;object-fit:cover}
   .ocean-waves,.floating-waves{position:absolute;inset:0;pointer-events:none}
   .ocean-waves{
     background:
@@ -99,6 +106,22 @@
     .hud-label{font-size:13px}
     .hud-value{font-size:15px}
     .pause-btn{display:block !important}
+  }
+  
+  /* Additional mobile-specific fixes */
+  @media screen and (max-width: 480px) {
+    .title{font-size:2rem}
+    .hud-top{gap:15px}
+    .hud-bottom{gap:15px}
+    .progress-mini{width:60px}
+  }
+  
+  /* Fix for very tall screens */
+  @media screen and (min-aspect-ratio: 9/16) and (max-width: 480px) {
+    #gameContainer {
+      height: 100vh;
+      height: 100dvh;
+    }
   }
 </style>
 </head>
@@ -234,7 +257,9 @@ const game = {
   isMobile: /Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent),
   lastObstacleSpawn: 0,
   lastItemSpawn: 0,
-  oceanTime: 0
+  oceanTime: 0,
+  devicePixelRatio: window.devicePixelRatio || 1,
+  initialPlayerY: 0
 };
 
 const player = {
@@ -253,8 +278,6 @@ const player = {
 let obstacles=[], items=[], keys={}, particles=[], touchState={left:false,right:false};
 let waterDroplets = [];
 let audioContext=null, audioInitialized=false;
-
-// Store references for proper cleanup
 let mobileEventListeners = [];
 
 /* ------------ Audio system ------------ */
@@ -263,16 +286,13 @@ function initAudio(){
   try{ 
     audioContext = new (window.AudioContext||window.webkitAudioContext)(); 
     
-    // Handle audio context state properly
     if(audioContext.state === 'suspended') {
-      // Modern browsers require user interaction
       const resumeAudio = () => {
         if(audioContext && audioContext.state === 'suspended') {
           audioContext.resume().then(() => {
             audioInitialized = true;
           }).catch(e => console.warn('Audio resume failed:', e));
         }
-        // Remove the listener after first interaction
         document.removeEventListener('touchstart', resumeAudio);
         document.removeEventListener('click', resumeAudio);
       };
@@ -329,7 +349,6 @@ function setupMobileControls(){
   const leftArea = document.getElementById('mobileLeftArea');
   const rightArea = document.getElementById('mobileRightArea');
   
-  // Define event handlers for proper cleanup
   const leftTouchStart = (e) => {
     e.preventDefault(); 
     touchState.left = true;
@@ -348,14 +367,12 @@ function setupMobileControls(){
   };
   const preventMove = (e) => e.preventDefault();
   
-  // Add event listeners and store references
   leftArea.addEventListener('touchstart', leftTouchStart);
   leftArea.addEventListener('touchend', leftTouchEnd);
   rightArea.addEventListener('touchstart', rightTouchStart);
   rightArea.addEventListener('touchend', rightTouchEnd);
   document.addEventListener('touchmove', preventMove, {passive: false});
   
-  // Store for cleanup
   mobileEventListeners = [
     {element: leftArea, event: 'touchstart', handler: leftTouchStart},
     {element: leftArea, event: 'touchend', handler: leftTouchEnd},
@@ -375,33 +392,65 @@ function initGame(){
   game.ctx = game.canvas.getContext('2d');
   resizeCanvas();
   window.addEventListener('resize', resizeCanvas);
+  window.addEventListener('orientationchange', () => {
+    setTimeout(resizeCanvas, 100);
+  });
 
-  // Reset state
   Object.assign(game, {
     distance:0, score:0, season:0, shakeTime:0, 
     combo:0, comboTimer:0, paused:false,
     lastObstacleSpawn:0, lastItemSpawn:0, oceanTime:0
   });
   
-  // Reset player position more safely
-  player.x = (game.width - player.width) / 2;
-  player.y = game.height - player.height - 30;
+  setInitialPlayerPosition();
   Object.assign(player, {hull:100, fuel:100, sails:100, bobOffset:0});
   player.wakeTrail = [];
   
-  // Clear arrays
   obstacles.length = 0;
   items.length = 0;
   particles.length = 0;
   waterDroplets.length = 0;
 
-  // Event listeners
   document.addEventListener('keydown', onKeyDown);
   document.addEventListener('keyup', onKeyUp);
 
   game.running = true;
   game.lastTime = performance.now();
   requestAnimationFrame(gameLoop);
+}
+
+function setInitialPlayerPosition() {
+  const bottomMargin = Math.max(30, game.height * 0.05);
+  const sideMargin = Math.max(10, game.width * 0.02);
+  
+  player.x = Math.max(sideMargin, (game.width - player.width) / 2);
+  player.y = Math.max(0, game.height - player.height - bottomMargin);
+  
+  game.initialPlayerY = player.y;
+  
+  player.x = Math.min(player.x, game.width - player.width - sideMargin);
+  
+  console.log('Player positioned at:', player.x, player.y, 'Screen:', game.width, game.height);
+}
+
+function repositionPlayerOnResize() {
+  const bottomMargin = Math.max(30, game.height * 0.05);
+  const sideMargin = Math.max(10, game.width * 0.02);
+  
+  const centerX = (game.width - player.width) / 2;
+  if(centerX >= sideMargin && centerX <= game.width - player.width - sideMargin) {
+    player.x = centerX;
+  } else {
+    player.x = Math.max(sideMargin, Math.min(player.x, game.width - player.width - sideMargin));
+  }
+  
+  const newY = game.height - player.height - bottomMargin;
+  player.y = Math.max(0, newY);
+  
+  player.x = Math.max(0, Math.min(player.x, game.width - player.width));
+  player.y = Math.max(0, Math.min(player.y, game.height - player.height));
+  
+  console.log('Player repositioned to:', player.x, player.y, 'Screen:', game.width, game.height);
 }
 
 function restartGame(){
@@ -423,14 +472,13 @@ function cleanup(){
   document.removeEventListener('keydown', onKeyDown);
   document.removeEventListener('keyup', onKeyUp);
   window.removeEventListener('resize', resizeCanvas);
+  window.removeEventListener('orientationchange', resizeCanvas);
   
-  // Clean up mobile event listeners
   mobileEventListeners.forEach(({element, event, handler}) => {
     element.removeEventListener(event, handler);
   });
   mobileEventListeners = [];
   
-  // Properly close audio context if it exists
   if(audioContext && audioContext.state !== 'closed') {
     try {
       audioContext.close();
@@ -458,24 +506,30 @@ function onKeyUp(e){
 }
 
 function resizeCanvas(){
-  // Ensure minimum viable game area
-  game.width = Math.max(320, window.innerWidth); 
-  game.height = Math.max(480, window.innerHeight);
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  
+  game.width = Math.max(320, viewportWidth); 
+  game.height = Math.max(480, viewportHeight);
   
   if(!game.canvas) return;
   
-  game.canvas.width = game.width; 
-  game.canvas.height = game.height;
+  game.canvas.style.width = viewportWidth + 'px';
+  game.canvas.style.height = viewportHeight + 'px';
   
-  // Safely reposition player if needed
+  const dpr = game.devicePixelRatio;
+  game.canvas.width = viewportWidth * dpr;
+  game.canvas.height = viewportHeight * dpr;
+  
+  if(game.ctx) {
+    game.ctx.scale(dpr, dpr);
+  }
+  
+  game.width = viewportWidth;
+  game.height = viewportHeight;
+  
   if(game.running){
-    player.x = Math.max(0, Math.min(player.x, game.width - player.width));
-    player.y = Math.max(0, Math.min(player.y, game.height - player.height));
-    
-    // Ensure player stays in playable area on very small screens
-    if(game.width < 400) {
-      player.x = Math.max(10, Math.min(player.x, game.width - player.width - 10));
-    }
+    repositionPlayerOnResize();
   }
 }
 
@@ -518,12 +572,11 @@ function update(deltaTime){
 }
 
 function updateOceanEffects(deltaTime) {
-  // Update water droplets with memory management
   for(let i = waterDroplets.length - 1; i >= 0; i--) {
     const drop = waterDroplets[i];
     drop.x += drop.vx * deltaTime;
     drop.y += drop.vy * deltaTime;
-    drop.vy += 150 * deltaTime; // gravity
+    drop.vy += 150 * deltaTime;
     drop.life -= deltaTime;
     drop.alpha = Math.max(0, drop.life / drop.maxLife);
     
@@ -532,12 +585,10 @@ function updateOceanEffects(deltaTime) {
     }
   }
   
-  // Cap water droplets to prevent memory issues
   if(waterDroplets.length > 100) {
     waterDroplets.splice(0, waterDroplets.length - 100);
   }
   
-  // Update player's wake trail
   if(player.wakeTrail.length > 20) {
     player.wakeTrail.shift();
   }
@@ -547,10 +598,8 @@ function updateOceanEffects(deltaTime) {
     age: 0
   });
   
-  // Age wake trail
   player.wakeTrail.forEach(wake => wake.age += deltaTime);
   
-  // Update player bobbing motion
   player.bobOffset = Math.sin(game.oceanTime * 2.5) * 3 + Math.sin(game.oceanTime * 1.8) * 1.5;
 }
 
@@ -592,10 +641,8 @@ function showSeasonTransition(){
 function updatePlayer(deltaTime, sailEfficiency){
   const moveSpeed = player.speed * (0.5 + sailEfficiency * 0.5);
   
-  // Handle input (keyboard or touch)
   if(keys['ArrowLeft'] || touchState.left) {
     player.x -= moveSpeed;
-    // Create water splash effect when turning
     if(Math.random() < 0.3) {
       createWaterDroplets(player.x, player.y + player.height/2, 2);
     }
@@ -607,10 +654,15 @@ function updatePlayer(deltaTime, sailEfficiency){
     }
   }
   
-  // Boundary checking
-  player.x = Math.max(0, Math.min(player.x, game.width - player.width));
+  const sideMargin = Math.max(5, game.width * 0.01);
+  player.x = Math.max(sideMargin, Math.min(player.x, game.width - player.width - sideMargin));
 
-  // Resource decay with season difficulty
+  const bottomMargin = Math.max(30, game.height * 0.05);
+  const maxY = game.height - player.height - bottomMargin;
+  if(player.y < maxY * 0.7) {
+    player.y = maxY;
+  }
+
   const decayMultiplier = 1 + game.season * 0.3;
   player.hull = Math.max(0, player.hull - player.hullDecay * deltaTime * decayMultiplier);
   player.fuel = Math.max(0, player.fuel - player.fuelDecay * deltaTime * decayMultiplier);
@@ -620,7 +672,6 @@ function updatePlayer(deltaTime, sailEfficiency){
 function updateSystems(deltaTime){
   if(game.shakeTime > 0) game.shakeTime -= deltaTime;
 
-  // Combo system
   if(game.combo > 1){
     game.comboTimer -= deltaTime;
     if(game.comboTimer <= 0){
@@ -634,7 +685,6 @@ function spawnObjects(deltaTime){
   const seasonMultiplier = 1 + game.season * 0.7;
   const currentTime = performance.now();
   
-  // Spawn obstacles with better timing
   if(currentTime - game.lastObstacleSpawn > (800 / seasonMultiplier)){
     if(Math.random() < CONFIG.SPAWN.OBSTACLE_BASE_CHANCE * seasonMultiplier){
       spawnObstacle();
@@ -642,7 +692,6 @@ function spawnObjects(deltaTime){
     }
   }
   
-  // Spawn items with better timing
   if(currentTime - game.lastItemSpawn > 1200){
     if(Math.random() < CONFIG.SPAWN.ITEM_BASE_CHANCE){
       spawnItem();
@@ -681,13 +730,11 @@ function spawnItem(){
 }
 
 function updateGameObjects(deltaTime){
-  // Update obstacles
   for(let i = obstacles.length - 1; i >= 0; i--){
     const obstacle = obstacles[i];
     obstacle.y += obstacle.speed;
     obstacle.rotation += obstacle.rotationSpeed * deltaTime;
     
-    // Update obstacle wake trail
     if(obstacle.wakeTrail.length > 10) {
       obstacle.wakeTrail.shift();
     }
@@ -703,7 +750,6 @@ function updateGameObjects(deltaTime){
     }
   }
   
-  // Update items
   for(let i = items.length - 1; i >= 0; i--){
     const item = items[i];
     item.y += item.speed;
@@ -714,7 +760,6 @@ function updateGameObjects(deltaTime){
     }
   }
   
-  // Update particles
   updateParticles(deltaTime);
 }
 
@@ -731,7 +776,6 @@ function updateParticles(deltaTime){
     }
   }
   
-  // Cap particles to prevent memory issues
   if(particles.length > 150) {
     particles.splice(0, particles.length - 150);
   }
@@ -753,7 +797,6 @@ function createParticles(x, y, color, count = 8){
   }
 }
 
-/* ------------ Collision Detection ------------ */
 function aabb(a, b){
   return a.x < b.x + b.width && 
          a.x + a.width > b.x && 
@@ -762,7 +805,6 @@ function aabb(a, b){
 }
 
 function checkCollisions(){
-  // Check obstacle collisions
   for(let i = obstacles.length - 1; i >= 0; i--){
     const obstacle = obstacles[i];
     if(aabb(player, obstacle)){
@@ -771,7 +813,6 @@ function checkCollisions(){
     }
   }
   
-  // Check item collisions
   for(let i = items.length - 1; i >= 0; i--){
     const item = items[i];
     if(aabb(player, item)){
@@ -795,14 +836,12 @@ function handleObstacleHit(obstacle){
     12
   );
   
-  // Create dramatic water splash
   createWaterDroplets(obstacle.x + obstacle.width/2, obstacle.y + obstacle.height/2, 15);
   
   triggerScreenShake();
 }
 
 function handleItemCollection(item){
-  // Combo system
   game.combo++;
   game.comboTimer = CONFIG.COMBO.DURATION;
   
@@ -827,7 +866,6 @@ function handleItemCollection(item){
     createParticles(item.x + item.width/2, item.y + item.height/2, '#32cd32', 10);
   }
   
-  // Small water splash on item collection
   createWaterDroplets(item.x + item.width/2, item.y + item.height/2, 3);
 }
 
@@ -843,11 +881,9 @@ function updateScore(){
   game.score = Math.floor(game.distance * game.seasonMultipliers[game.season] * comboMultiplier);
 }
 
-/* ------------ Rendering ------------ */
 function render(){
   const ctx = game.ctx;
   
-  // Screen shake effect
   if(game.shakeTime > 0){
     ctx.save();
     const intensity = game.shakeTime * 15;
@@ -857,7 +893,6 @@ function render(){
     );
   }
 
-  // Enhanced ocean background
   renderRealisticOcean(ctx);
   renderPlayer(ctx);
   renderObstacles(ctx);
@@ -869,33 +904,27 @@ function render(){
 }
 
 function renderRealisticOcean(ctx) {
-  // Multi-layered water depth effect
   const gradient = ctx.createLinearGradient(0, 0, 0, game.height);
   
-  // Season-specific water colors
   const waterColorSets = [
-    // Summer - bright tropical blue
     {
       surface: '#87CEEB',
       shallow: '#4682B4', 
       deep: '#191970',
       accent: '#20B2AA'
     },
-    // Autumn - deeper, more muted
     {
       surface: '#6B8DB5',
       shallow: '#2F4F4F',
       deep: '#1C3A3A',
       accent: '#4682B4'
     },
-    // Winter - cold, steel blue
     {
       surface: '#B0C4DE',
       shallow: '#4682B4',
       deep: '#0F1B44',
       accent: '#87CEFA'
     },
-    // Storm - dark, violent seas
     {
       surface: '#2F2F2F',
       shallow: '#1C1C1C',
@@ -906,7 +935,6 @@ function renderRealisticOcean(ctx) {
   
   const colors = waterColorSets[game.season];
   
-  // Create depth gradient
   gradient.addColorStop(0, colors.surface);
   gradient.addColorStop(0.3, colors.shallow);
   gradient.addColorStop(0.7, colors.deep);
@@ -915,30 +943,25 @@ function renderRealisticOcean(ctx) {
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, game.width, game.height);
   
-  // Ocean floor suggestion (distant)
   renderOceanFloor(ctx);
 }
 
 function renderOceanFloor(ctx) {
-  // Subtle ocean floor texture in deep water - FIXED
   const floorY = game.height * 0.85;
-  const floorHeight = game.height - floorY; // Calculate proper height
+  const floorHeight = game.height - floorY;
   const time = game.oceanTime;
   
   ctx.save();
   ctx.globalAlpha = 0.1;
   
-  // Sandy bottom suggestion
   const floorGradient = ctx.createLinearGradient(0, floorY, 0, game.height);
   floorGradient.addColorStop(0, 'transparent');
   floorGradient.addColorStop(0.3, 'rgba(139,126,102,0.3)');
   floorGradient.addColorStop(1, 'rgba(101,67,33,0.5)');
   
   ctx.fillStyle = floorGradient;
-  // FIXED: Use proper width and height
   ctx.fillRect(0, floorY, game.width, floorHeight);
   
-  // Subtle seaweed/coral suggestions
   ctx.strokeStyle = 'rgba(34,139,34,0.4)';
   ctx.lineWidth = 2;
   
@@ -961,18 +984,15 @@ function renderOceanFloor(ctx) {
 }
 
 function renderOceanEffects(ctx) {
-  // Render water droplets
   waterDroplets.forEach(drop => {
     ctx.save();
     ctx.globalAlpha = drop.alpha;
     ctx.fillStyle = 'rgba(173,216,230,0.8)';
     
-    // Simple droplet shape
     ctx.beginPath();
     ctx.arc(drop.x, drop.y, drop.size, 0, Math.PI * 2);
     ctx.fill();
     
-    // Highlight
     ctx.fillStyle = 'rgba(255,255,255,0.6)';
     ctx.beginPath();
     ctx.arc(drop.x - drop.size * 0.3, drop.y - drop.size * 0.3, drop.size * 0.4, 0, Math.PI * 2);
@@ -981,7 +1001,6 @@ function renderOceanEffects(ctx) {
     ctx.restore();
   });
   
-  // Render wake trails
   renderWakeTrail(ctx, player.wakeTrail, 'rgba(255,255,255,0.4)');
   
   obstacles.forEach(obstacle => {
@@ -1000,8 +1019,7 @@ function renderWakeTrail(ctx, trail, color) {
   ctx.beginPath();
   for(let i = 0; i < trail.length - 1; i++) {
     const wake = trail[i];
-    const nextWake = trail[i + 1];
-    const alpha = Math.max(0, 1 - wake.age / 2); // Fade over 2 seconds
+    const alpha = Math.max(0, 1 - wake.age / 2);
     
     ctx.save();
     ctx.globalAlpha = alpha;
@@ -1020,14 +1038,12 @@ function renderWakeTrail(ctx, trail, color) {
 }
 
 function renderPlayer(ctx){
-  // Apply bobbing motion from ocean
   const playerY = player.y + player.bobOffset;
   drawPlayerShip(ctx, player.x, playerY, player.width, player.height);
 }
 
 function renderObstacles(ctx){
   obstacles.forEach(obstacle => {
-    // Add slight bobbing to obstacles too
     const bobbing = Math.sin(game.oceanTime * 2 + obstacle.x * 0.01) * 2;
     obstacle.renderY = obstacle.y + bobbing;
     drawEnemyShip(ctx, obstacle);
@@ -1037,7 +1053,6 @@ function renderObstacles(ctx){
 function renderItems(ctx){
   items.forEach(item => {
     const bobOffset = Math.sin(item.sparkleTime * 3 + item.bobOffset) * 4;
-    // Add water bobbing effect
     const waterBob = Math.sin(game.oceanTime * 2.5 + item.x * 0.02) * 1.5;
     drawItem(ctx, item, bobOffset + waterBob);
   });
@@ -1058,12 +1073,10 @@ function renderParticles(ctx){
   });
 }
 
-/* ------------ Drawing Functions ------------ */
 function drawPlayerShip(ctx, x, y, width, height){
   ctx.save();
   ctx.translate(x + width/2, y + height/2);
 
-  // Hull with damage indication
   const hullColor = player.hull > 75 ? '#f2f6ff' : 
                    player.hull > 50 ? '#f0f0e0' : 
                    player.hull > 25 ? '#e8e0d0' : '#d0c0b0';
@@ -1077,7 +1090,6 @@ function drawPlayerShip(ctx, x, y, width, height){
   ctx.closePath();
   ctx.fill();
 
-  // Water line and reflection
   ctx.strokeStyle = 'rgba(70,130,180,0.6)';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -1085,7 +1097,6 @@ function drawPlayerShip(ctx, x, y, width, height){
   ctx.lineTo(width * 0.35, height * 0.35);
   ctx.stroke();
 
-  // Hull reflection in water
   ctx.save();
   ctx.globalAlpha = 0.3;
   ctx.fillStyle = hullColor;
@@ -1100,7 +1111,6 @@ function drawPlayerShip(ctx, x, y, width, height){
   ctx.fill();
   ctx.restore();
 
-  // Deck details
   ctx.strokeStyle = 'rgba(0,0,0,0.2)';
   ctx.lineWidth = 2;
   ctx.beginPath();
@@ -1108,17 +1118,14 @@ function drawPlayerShip(ctx, x, y, width, height){
   ctx.lineTo(width * 0.32, height * 0.30);
   ctx.stroke();
 
-  // Mast
   ctx.fillStyle = '#c9d3e7';
   ctx.fillRect(-2, -height * 0.48, 4, height * 0.78);
 
-  // Sails with health-based opacity and wind effect
   const sailAlpha = 0.85 * Math.max(0.25, player.sails / 100);
   const windEffect = Math.sin(game.oceanTime * 3) * 2;
   
   ctx.fillStyle = `rgba(255,255,255,${sailAlpha})`;
   
-  // Main sail with wind billowing
   ctx.beginPath();
   ctx.moveTo(0, -height * 0.45);
   ctx.quadraticCurveTo(width * 0.30 + windEffect, -height * 0.25, width * 0.30, -height * 0.05);
@@ -1126,7 +1133,6 @@ function drawPlayerShip(ctx, x, y, width, height){
   ctx.closePath();
   ctx.fill();
   
-  // Jib sail
   ctx.beginPath();
   ctx.moveTo(0, -height * 0.35);
   ctx.quadraticCurveTo(-width * 0.28 - windEffect * 0.5, -height * 0.15, -width * 0.28, 0);
@@ -1134,7 +1140,6 @@ function drawPlayerShip(ctx, x, y, width, height){
   ctx.closePath();
   ctx.fill();
 
-  // Enhanced wake effect
   const wakeAlpha = 0.6 + Math.sin(game.oceanTime * 4) * 0.2;
   ctx.fillStyle = `rgba(255,255,255,${wakeAlpha})`;
   ctx.fillRect(-width * 0.22, height * 0.45, width * 0.44, 3);
@@ -1143,7 +1148,6 @@ function drawPlayerShip(ctx, x, y, width, height){
   ctx.fillRect(-width * 0.16, height * 0.50, width * 0.32, 2);
   ctx.fillRect(-width * 0.10, height * 0.55, width * 0.20, 1);
 
-  // Damage indicators
   if(player.hull < 50){
     ctx.fillStyle = player.hull < 25 ? '#ff3333' : '#ff9900';
     const damageCount = player.hull < 25 ? 4 : 2;
@@ -1163,7 +1167,6 @@ function drawEnemyShip(ctx, enemy){
   ctx.save();
   ctx.translate(enemy.x + enemy.width/2, renderY + enemy.height/2);
   
-  // Main hull
   ctx.fillStyle = '#0b0b0b';
   ctx.beginPath();
   ctx.moveTo(0, enemy.height * 0.50);
@@ -1173,7 +1176,6 @@ function drawEnemyShip(ctx, enemy){
   ctx.closePath();
   ctx.fill();
 
-  // Hull reflection
   ctx.save();
   ctx.globalAlpha = 0.2;
   ctx.fillStyle = '#0b0b0b';
@@ -1188,15 +1190,12 @@ function drawEnemyShip(ctx, enemy){
   ctx.fill();
   ctx.restore();
 
-  // Bridge/command structure
   ctx.fillStyle = '#1a1a1a';
   ctx.fillRect(-enemy.width * 0.16, -enemy.height * 0.18, enemy.width * 0.32, enemy.height * 0.18);
   
-  // Gun turret
   ctx.fillStyle = '#0d0d0d';
   ctx.fillRect(-3, -enemy.height * 0.10, 6, enemy.height * 0.20);
   
-  // Enemy wake
   ctx.fillStyle = 'rgba(50,50,50,0.4)';
   ctx.fillRect(-enemy.width * 0.2, enemy.height * 0.45, enemy.width * 0.4, 2);
   
@@ -1207,7 +1206,6 @@ function drawItem(ctx, item, bobOffset){
   ctx.save();
   ctx.translate(item.x + item.width/2, item.y + item.height/2 + bobOffset);
   
-  // Add water reflection for items
   ctx.save();
   ctx.globalAlpha = 0.3;
   ctx.scale(1, -0.4);
@@ -1222,9 +1220,7 @@ function drawItem(ctx, item, bobOffset){
   }
   ctx.restore();
   
-  // Draw main item
   if(item.type === 'fuel'){
-    // Fuel canister
     ctx.fillStyle = '#ff6600';
     ctx.fillRect(-item.width/2, -item.height/2, item.width, item.height);
     ctx.fillStyle = '#ff9900';
@@ -1234,7 +1230,6 @@ function drawItem(ctx, item, bobOffset){
     ctx.textAlign = 'center';
     ctx.fillText('F', 0, 4);
   } else {
-    // Repair kit (cross symbol)
     ctx.fillStyle = '#228b22';
     ctx.fillRect(-item.width/2, -item.height/2, item.width, item.height);
     ctx.fillStyle = '#32cd32';
@@ -1249,7 +1244,6 @@ function drawItem(ctx, item, bobOffset){
     ctx.stroke();
   }
   
-  // Enhanced sparkle effect with water interaction
   if(Math.sin(item.sparkleTime * 8) > 0.5){
     ctx.strokeStyle = 'rgba(255,255,255,0.8)';
     ctx.lineWidth = 1;
@@ -1257,7 +1251,6 @@ function drawItem(ctx, item, bobOffset){
     ctx.arc(0, 0, item.width/2 + 4, 0, Math.PI * 2);
     ctx.stroke();
     
-    // Water ripples around item
     ctx.strokeStyle = 'rgba(173,216,230,0.5)';
     ctx.lineWidth = 1;
     ctx.beginPath();
@@ -1268,7 +1261,6 @@ function drawItem(ctx, item, bobOffset){
   ctx.restore();
 }
 
-/* ------------ HUD Updates ------------ */
 function updateHUD(){
   const distance = Math.max(0, Math.floor(game.distance / 1000));
   const score = Math.max(0, Math.floor(game.score));
@@ -1289,11 +1281,9 @@ function updateHUD(){
   document.getElementById('fuelBar').style.width = fuel + '%';
 }
 
-/* ------------ Game End ------------ */
 function endGame(){
   cleanup();
   
-  // Death sound sequence
   beep(220, 420, 'sawtooth');
   setTimeout(() => beep(160, 420, 'sawtooth'), 200);
   setTimeout(() => beep(110, 620, 'sawtooth'), 420);
@@ -1307,7 +1297,6 @@ function endGame(){
   document.getElementById('gameOverScreen').style.display = 'flex';
 }
 
-/* ------------ Initialization ------------ */
 window.addEventListener('load', () => {
   game.canvas = document.getElementById('gameCanvas');
   if(game.canvas) {
@@ -1315,7 +1304,6 @@ window.addEventListener('load', () => {
     resizeCanvas();
   }
   
-  // Detect mobile and show appropriate controls info
   if(game.isMobile) {
     const controlsText = document.querySelector('.controls');
     if(controlsText) {
