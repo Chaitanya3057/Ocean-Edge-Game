@@ -522,6 +522,8 @@ function resizeCanvas(){
   game.canvas.height = viewportHeight * dpr;
   
   if(game.ctx) {
+    // FIXED: Reset transform before scaling to prevent accumulating transforms
+    game.ctx.setTransform(1, 0, 0, 1, 0, 0);
     game.ctx.scale(dpr, dpr);
   }
   
