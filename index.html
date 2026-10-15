@@ -183,13 +183,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,system-ui,Segoe UI,Roboto,Ubun
       <button class="game-btn" onclick="GameManager.returnToMenu()">Exit</button>
     </div>
   </div>
-  <!-- GAME OVER SCREEN -->
+   <!-- GAME OVER SCREEN -->
   <div id="gameOverScreen">
     <h2 class="title" style="font-size:3rem;color:#ff6b6b">Game Over</h2>
     <p style="margin:8px 0">Distance Sailed: <b id="finalDistance">0 km</b></p>
     <p style="margin:8px 0">Total Crashes: <b id="finalCrashes">0</b></p>
     <p style="margin:8px 0">Season Reached: <b id="finalSeason">Winter</b></p>
-    <div style="display:flex;gap:10px;margin-top:18px">
+    <div style="display:flex;flex-direction:column;gap:10px;margin-top:18px;width:100%;padding:0 20px;max-width:400px">
       <button class="game-btn" onclick="GameManager.restartGame()">Play Again</button>
       <button class="game-btn" onclick="GameManager.returnToMenu()">Main Menu</button>
     </div>
@@ -239,8 +239,8 @@ const CONFIG = {
     MIN_SPEED: 2,
     MAX_SPEED: 4,
     SPAWN_COOLDOWN_MS: 800,
-    BASE_SPAWN_PROBABILITY: 0.012,
-    COLLISION_DAMAGE: 22,
+    BASE_SPAWN_PROBABILITY: 0.750,
+    COLLISION_DAMAGE: 25,
     WAKE_TRAIL_LENGTH: 10
   },
   ITEMS: {
@@ -250,14 +250,14 @@ const CONFIG = {
     MAX_SPEED: 2.2,
     SPAWN_COOLDOWN_MS: 1200,
     BASE_SPAWN_PROBABILITY: 0.008,
-    FUEL_RESTORE_AMOUNT: 30,
-    HULL_REPAIR_AMOUNT: 35,
+    FUEL_RESTORE_AMOUNT: 5,
+    HULL_REPAIR_AMOUNT: 5,
     SAILS_REPAIR_AMOUNT: 20
   },
   SEASONS: {
     NAMES: ['Winter', 'Summer', 'Monsoon', 'Storm'],
     CSS_CLASSES: ['winter', 'summer', 'monsoon', 'storm'],
-    DURATION_MINUTES: [2, 2, 2, Infinity],
+    DURATION_MINUTES: [1.5, 1.5, 1.5, Infinity],
     STORM_DISTANCE_KM: 50,
     DIFFICULTY_SCALING: 0.7,
     DECAY_RATE_MULTIPLIER: 0.3,
